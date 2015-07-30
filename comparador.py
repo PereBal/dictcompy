@@ -5,63 +5,63 @@ Python dictionary/list comparator, take a look at the readme to underestand
 better how it works and what it does.
 
 Grammar & usage:
-    from comparador import Komparator
+    from comparador import Comparator
 
-    <instance_name> = Komparator()
+    <instance_name> = Comparator()
 
     <instance_name>.comparar(dst, model[, evalf])
 
     dst::= dict | list
 
-    model::= kdict |  klist
+    model::= cdict |  clist
 
     evalf::= two args evaluation function 'dst operand model' to be applied on
              each field.
 
-    kdict::= '{' key: kfield {, key: kfield} '}'
+    cdict::= '{' key: cfield {, key: cfield} '}'
           |  '{' '}'
 
-    klist::= '[' kfield {, kfield} ']'
+    clist::= '[' cfield {, cfield} ']'
           |  '[' ']'
 
-    kfield::= ['('] python built-in basic type name [')']
-           |  '(' kfunc ')'
-           |  kdict
-           |  klist
+    cfield::= ['('] python built-in basic type name [')']
+           |  '(' cfunc ')'
+           |  cdict
+           |  clist
 
-    kfunc::= <instance_name>.Opt, kelem
-          |  <instance_name>.In, kin
-          |  <instance_name>.Date, kdate
-          |  <instance_name>.Like, klike
-          |  <instance_name>.Val, kelem [, evalf]
-          |  <instance_name>.Excl, '(' kexcl, kexcl {, kexcl} ')', kelem
+    cfunc::= <instance_name>.Opt, celem
+          |  <instance_name>.In, cin
+          |  <instance_name>.Date, cdate
+          |  <instance_name>.Like, clike
+          |  <instance_name>.Val, celem [, evalf]
+          |  <instance_name>.Excl, '(' cexcl, cexcl {, cexcl} ')', celem
 
-    kelem::= kdict
-          |  klist
-          |  kfield
+    celem::= cdict
+          |  clist
+          |  cfield
 
-    kin::= set of elements
+    cin::= set of elements
 
-    kdate::= date format (string)
+    cdate::= date format (string)
 
-    klike::= regex (string)
+    clike::= regex (string)
 
-    kexcl::= python built-in type variable (1, 'a', True, ...)
+    cexcl::= python built-in type variable (1, 'a', True, ...)
 
-Kfunc description:
+cfunc description:
     ·Opt: mark the left-closest dictionary key appearance as optional. Has no
           effect on lists.
 
-    ·In: test if dst key is in kin set.
+    ·In: test if dst key is in cin set.
 
-    ·Date: test if dst field is kdate formatted.
+    ·Date: test if dst field is cdate formatted.
 
-    ·Like: test if dst field matches klike.
+    ·Like: test if dst field matches clike.
 
     ·Val: test (with evalf or equality test if, evalf not provided) if dst field
-          is equal to kelem.
+          is equal to celem.
 
-    ·Excl: test if kelem contains only one of kexcl key fields. Has no effect on
+    ·Excl: test if celem contains only one of cexcl key fields. Has no effect on
            lists.
 
 Version: 0.1
@@ -70,140 +70,145 @@ Examples:
     TODO
 """
 # TODO: 
-#   -per millorar els missatges a llistes-> pila que guarda la darrera key
-#   -canviar els prints per excepcions i montar-ho perque executant cada
-#   subfunció es pugui saber si algo ha anat malament.
 #   -afegir soport al multi{threading, processing}
-#   -afegir soport a les tuples com a elements
+import sys
 import re
-from time import strftime
-class Komparator(object):
+from time import strptime
+from types import StringTypes
+from inspect import isclass
 
-    def __init__(self, *args, **kwargs):
-        super(Komparator, self).__init__(*args, **kwargs)
+module = sys.modules[__name__]
+
+# TODO
+def Evalf(resp, kwargs):
+    return kwargs[2](resp, kwargs[1])
+
+# TODO
+def Opt(resp, kwargs):
+    return kwargs[2](resp, kwargs[1])
+
+# TODO
+def Value(resp, kwargs):
+    if len(kwargs) == 4:
+        return kwargs[2](resp, kwargs[1])
+    else:
+        return resp == kwargs[1]
+
+def Excl(resp, items):
+    r = tuple(set(items[1]) & set(resp))
+    if len(r) != 1:
+        return False
+    return module._comparar_dict(resp, dict.fromkeys(r[0], items[2][r[0]]), items[3])
+
+def In(resp, iset):
+    return resp in iset[1]
+
+def Like(resp, pattern):
+    pat = re.compile(pattern[1])
+    return pat.match(resp)
+
+def Date(resp, form):
+    try:
+        strptime(resp, form[1])
+    except ValueError:
+        return False
+    else:
+        return True
+
+def _decompose(v):
+    if isinstance(v, tuple):
+        t = v[0]
+        if len(v) > 1:
+            v = v[1]
+    else:
+        ta = type(v)
+        t = v if ta == type else ta
+
+    return (t, v)
+
+def _dispatch(resp, kwargs, evalf, t, v):
+    ok = False
+    if t == dict:
+        ok = module._comparar_dict(resp, v, evalf)
+    elif t in (list, tuple, set):
+        ok = module._comparar_list(resp, v, evalf)
+    elif (isclass(t) and issubclass(t, StringTypes)) or isinstance(t, StringTypes):
+        ok = evalf(resp, StringTypes)
+    elif getattr(module, t.__name__, None):
+        ok = t(resp, (kwargs + (evalf,)))
+    else:
+        ok = evalf(resp, t)
+
+    return ok
+
+def _comparar_dict(resp, kwargs, evalf):
+    for k,v in kwargs.iteritems():
+        if not k in resp:
+            if not (isinstance(v, tuple) and v[0] == Opt):
+                return False
+            continue
+
+        t, v = module._decompose(v)
+
+        if not module._dispatch(resp[k], kwargs[k], evalf, t, v):
+            return False
+
+    return True
 
 
-    def __decompose(self, v):
-        if isinstance(v, tuple):
-            t = v[0]
-            if len(v) > 1:
-                v = v[1]
-        else:
-            t = v
-
-        return (t, v)
-
-
-    def __excl(self, resp, excl):
-        err = None
-        for k in excl:
-            if k in resp:
-                if err:
-                    print(u'' + str(k) + ' and ' + str(err) + ' are not'
-                    + ' exclusive')
-                    return None
-                else:
-                    err = str(k)
-        return 1
-
-
-    def __dispatch(self, resp, kwargs, t, k, v):
-        err = False
-        if t == dict:
-            self.__comparar_dict(resp[k], v)
-        elif t == list:
-            self.__comparar_list(resp[k], v)
-        elif t == str or t == unicode:
-            # el orden es este por python 2 & roiback
-            err = not self.evalf(resp[k], unicode)
-            if err:
-                err = not self.evalf(resp[k], str)
-        elif getattr(self, t.__name__, None): # es una de las funciones
-            err = not t(resp[k], kwargs[k])
-        else:
-            err = not self.evalf(resp[k], v)
-
-        return err
-
-    def __comparar_dict(self, resp, kwargs, excl=None):
-        if excl:
-            if not self.__excl(resp, excl):
-                return None
-
-        for k,v in kwargs.iteritems():
-            if not k in resp:
-                if isinstance(v, tuple) and v[0] != self.Opt:
-                    print(u'key ' + str(k) + ' not in reponse')
-                return None
-
-            t, v = self.__decompose(v)
-
-            if self.__dispatch(resp, kwargs, t, k, v):
-                print(u'{' + str(k) + ',' + str(resp[k]) + '} non conformant'
-                        + ' with expected {' + str(k) + ',' + str(v) + '}')
-                return None
-
-        return 1
-
-
-    def __comparar_list(self, resp, kwargs):
+def _comparar_list(resp, kwargs, evalf):
+    # allow 'key: list'
+    try:
         if len(kwargs) != len(resp):
             if len(kwargs) != 1:
-                print(u'' + str(kwargs) + ' and ' + str(resp) + ' have different'
-                      + ' lenghts')
-                return None
-
+                return False
             iterset = resp
         else:
             iterset = kwargs
-
+    except AttributeError:
+        return type(resp) == kwargs
+    else:
+        # allow 'key: [1, ...]' and 'key: [1] for each elem of resp'
         for k in range(0, len(iterset)):
             v = iterset[k]
 
-            t, v = self.__decompose(v)
+            t, v = module._decompose(v)
 
-            if self.__dispatch(resp, kwargs, t, k, v):
-                print(u'resp[' + str(k) + ']:(' + str(resp[k]) + ') non '
-                      + 'conformant with expected kwargs[' + str(k) + ']:('
-                      + str(v) + ')')
-                return None
+            if not module._dispatch(resp[k], kwargs[k], evalf, t, v):
+                return False
 
-        return 1
+        return True
 
-    def Opt(self, resp, kwargs):
-        return self.evalf(resp, kwargs[1])
+class CException(Exception):
 
-    def Value(self, resp, kwargs):
-        if len(kwargs) == 3:
-            return kwargs[2](resp, kwargs[1])
-        else:
-            return resp == kwargs[1]
+    def __init__(self, *args, **kwargs):
+        super(CException, self).__init__()
 
-    def Excl(self, resp, items):
-        return self.__comparar_dict(resp, items[2], items[1])
+class Comparator(object):
 
-    def In(self, resp, iset):
-        return resp in iset[1]
-
-    # TODO
-    def Like(self, resp, pattern):
-        return re.match(u''+pattern[1], resp)
-
-    # TODO
-    def Date(self, resp, form):
-        try:
-            strftime(resp, form[1])
-        except ValueError:
-            return False
-        else:
-            return True
-
-    def comparar(self, resp, kwargs, evalf=None):
+    def __init__(self, model, evalf=None):
+        super(Comparator, self).__init__()
         if not evalf:
             evalf = lambda a,b: isinstance(a,b)
-
         self.evalf = evalf
-        if isinstance(kwargs, dict):
-            self.__comparar_dict(resp, kwargs)
-        else: # it's a trap i meaaan a list
-            self.__comparar_list(resp, kwargs)
+
+        self.modeltype = type(model)
+        if self.modeltype in (dict, list):
+            self.model = model
+        else:
+            raise CException('The model MUST be a dictionary or a list')
+
+    def match(self, resp):
+        if isinstance(resp, dict):
+            if not self.modeltype == dict:
+                return False
+            return module._comparar_dict(resp, self.model, self.evalf)
+
+        elif isinstance(resp, list):
+            if not self.modeltype == list:
+                return False
+            return module._comparar_list(resp, self.model, self.evalf)
+
+        else:
+            raise CException('The response MUST be a dictionary or a list')
+
