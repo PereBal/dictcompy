@@ -77,8 +77,6 @@ from time import strptime
 from types import StringTypes
 from inspect import isclass
 
-module = sys.modules[__name__]
-
 # TODO
 def Evalf(resp, kwargs):
     return kwargs[2](resp, kwargs[1])
@@ -98,7 +96,7 @@ def Excl(resp, items):
     r = tuple(set(items[1]) & set(resp))
     if len(r) != 1:
         return False
-    return module._comparar_dict(resp, dict.fromkeys(r[0], items[2][r[0]]), items[3])
+    return _comparar_dict(resp, dict.fromkeys(r[0], items[2][r[0]]), items[3])
 
 def In(resp, iset):
     return resp in iset[1]
@@ -129,9 +127,9 @@ def _decompose(v):
 def _dispatch(resp, kwargs, evalf, t, v):
     ok = False
     if t == dict:
-        ok = module._comparar_dict(resp, v, evalf)
+        ok = _comparar_dict(resp, v, evalf)
     elif t in (list, tuple, set):
-        ok = module._comparar_list(resp, v, evalf)
+        ok = _comparar_list(resp, v, evalf)
     elif (isclass(t) and issubclass(t, StringTypes)) or isinstance(t, StringTypes):
         ok = evalf(resp, StringTypes)
     elif getattr(module, t.__name__, None):
@@ -148,9 +146,9 @@ def _comparar_dict(resp, kwargs, evalf):
                 return False
             continue
 
-        t, v = module._decompose(v)
+        t, v = _decompose(v)
 
-        if not module._dispatch(resp[k], kwargs[k], evalf, t, v):
+        if not _dispatch(resp[k], kwargs[k], evalf, t, v):
             return False
 
     return True
@@ -172,9 +170,9 @@ def _comparar_list(resp, kwargs, evalf):
         for k in range(0, len(iterset)):
             v = iterset[k]
 
-            t, v = module._decompose(v)
+            t, v = _decompose(v)
 
-            if not module._dispatch(resp[k], kwargs[k], evalf, t, v):
+            if not _dispatch(resp[k], kwargs[k], evalf, t, v):
                 return False
 
         return True
@@ -202,12 +200,12 @@ class Comparator(object):
         if isinstance(resp, dict):
             if not self.modeltype == dict:
                 return False
-            return module._comparar_dict(resp, self.model, self.evalf)
+            return _comparar_dict(resp, self.model, self.evalf)
 
         elif isinstance(resp, list):
             if not self.modeltype == list:
                 return False
-            return module._comparar_list(resp, self.model, self.evalf)
+            return _comparar_list(resp, self.model, self.evalf)
 
         else:
             raise CException('The response MUST be a dictionary or a list')
