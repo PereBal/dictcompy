@@ -116,21 +116,22 @@ def Date(resp, form):
 def _decompose(v):
     if isinstance(v, tuple):
         t = v[0]
-        if len(v) > 1:
-            v = v[1]
     else:
         ta = type(v)
         t = v if ta == type else ta
 
-    return (t, v)
+    return t
 
 module = sys.modules[__name__]
-def _dispatch(resp, kwargs, evalf, t, v):
+def _dispatch(resp, kwargs, evalf):
     ok = False
+
+    t = _decompose(kwargs)
+
     if t == dict:
-        ok = _compare_dict(resp, v, evalf)
+        ok = _compare_dict(resp, kwargs, evalf)
     elif t in (list, tuple, set):
-        ok = _compare_list(resp, v, evalf)
+        ok = _compare_list(resp, kwargs, evalf)
     elif (isclass(t) and issubclass(t, StringTypes)) or isinstance(t, StringTypes):
         ok = evalf(resp, StringTypes)
     elif getattr(module, t.__name__, None):
@@ -141,15 +142,13 @@ def _dispatch(resp, kwargs, evalf, t, v):
     return ok
 
 def _compare_dict(resp, kwargs, evalf):
-    for k,v in kwargs.iteritems():
+    for k in kwargs.keys():
         if not k in resp:
-            if not (isinstance(v, tuple) and v[0] == Opt):
+            if not (isinstance(kwargs[k], tuple) and kwargs[k][0] == Opt):
                 return False
             continue
 
-        t, v = _decompose(v)
-
-        if not _dispatch(resp[k], kwargs[k], evalf, t, v):
+        if not _dispatch(resp[k], kwargs[k], evalf):
             return False
 
     return True
@@ -162,20 +161,22 @@ def _compare_list(resp, kwargs, evalf):
             if len(kwargs) != 1:
                 return False
             iterset = resp
+            # allow 'key: [1, ...]' and 'key: [1] for each elem of resp'
+            for k in range(0, len(iterset)):
+
+                if not _dispatch(resp[k], kwargs[0], evalf):
+                    return False
         else:
             iterset = kwargs
+            # allow 'key: [1, ...]' and 'key: [1] for each elem of resp'
+            for k in range(0, len(iterset)):
+                v = iterset[k]
+
+                if not _dispatch(resp[k], kwargs[k], evalf):
+                    return False
     except AttributeError:
         return type(resp) == kwargs
     else:
-        # allow 'key: [1, ...]' and 'key: [1] for each elem of resp'
-        for k in range(0, len(iterset)):
-            v = iterset[k]
-
-            t, v = _decompose(v)
-
-            if not _dispatch(resp[k], kwargs[k], evalf, t, v):
-                return False
-
         return True
 
 class DCPException(Exception):
@@ -197,9 +198,8 @@ class DictComPy(object):
         self.model = model
 
     def match(self, resp):
-        if isinstance(resp, dict):
-            return _compare_dict(resp, self.model, self.evalf)
-
-        else:
+        if not isinstance(resp, dict):
             raise DCPException('The response MUST be a dictionary')
+
+        return _compare_dict(resp, self.model, self.evalf)
 
