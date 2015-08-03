@@ -73,9 +73,16 @@ from sys import modules
 from time import strptime
 import re
 
+
+def Key_Like(expr, form):
+    u"""
+    la idea es crear una funcio que permeti evaluar les claus del diccionari segons una regex. Aquesta funcio s'ha de poder aplicar des del primer instant
+    """
+    raise DCPException("Not yet implemented")
+
 # TODO
 def Evalf(expr, model):
-    _dispatch(expr, model[2], model[1])
+    raise DCPException("Not yet implemented")
 
 def Opt(expr, model):
     u"""
@@ -102,7 +109,7 @@ def Excl(expr, items):
 
 def In(expr, iset):
     u"""
-    Test if expression is on the listed set
+    Test if expression is in the listed set
     """
     if expr not in iset[1]:
         raise DCPNoMatchException()
@@ -124,6 +131,23 @@ def Date(expr, form):
         strptime(expr, form[1])
     except ValueError:
         raise DCPNoMatchException()
+
+def Or_None(expr, form):
+    u"""
+    Test if expr is form or None
+    """
+    if expr is not None:
+        _dispatch(expr, form[1], form[2])
+
+def Or_Empty(expr, form):
+    u"""
+    Test if expr is an empty: dict, list, set, tuple, ...
+    """
+    if expr is None or type(expr) != type(form[1]):
+        raise DCPNoMatchException()
+
+    if expr:
+        _dispatch(expr, form[1], form[2])
 
 def _field_type(field):
     u"""
